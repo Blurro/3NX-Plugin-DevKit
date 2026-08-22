@@ -1,6 +1,6 @@
-# 3NX SysPlugins
+# 3NX Sysplugins
 
-3NX SysPlugins add dynamically loaded plugins to Nexus3DS.
+3NX Sysplugins add dynamically loaded plugins to Nexus3DS.
 
 Plugins use the `.3nx` format and can target either **Loader** or **Rosalina**. Multiple plugins can be loaded together, ordered by priority, and may optionally reference or depend on other plugins.
 
@@ -27,7 +27,7 @@ Each plugin has a unique four-character ID within its target module.
 
 Build using `./makeplugin.sh`. In the plugin dev environment, `make` is disabled.
 
-[See examples here!](https://github.com/Blurro/Nexus3DS-SysPlugins)
+[See examples here!](https://github.com/Blurro/Nexus3DS-Sysplugins)
 
 ## Installation
 
