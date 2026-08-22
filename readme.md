@@ -19,7 +19,7 @@ Unlike traditional fixed-address patches, 3NX plugins are relocatable. Nexus3DS 
 
 ## Plugin Development
 
-Unpack this repository over Nexus3DS (currently clone my fork) to create the plugin dev environment.
+Unpack this repository over Nexus3DS (currently clone [my fork](https://github.com/Blurro/Nexus3DS)) to create the plugin dev environment.
 
 Plugin code and data are placed into dedicated sections before being extracted and packaged into a `.3nx`.
 
@@ -27,7 +27,7 @@ Each plugin has a unique four-character ID within its target module.
 
 Build using `./makeplugin.sh`. In the plugin dev environment, `make` is disabled.
 
-Examples attached soon
+[See examples here!](https://github.com/Blurro/Nexus3DS-SysPlugins)
 
 ## Installation
 
