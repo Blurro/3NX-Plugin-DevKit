@@ -42,6 +42,6 @@ Plugins are selected and loaded automatically during boot. Make sure that 'load 
 The active `boot.firm` file must have its matching `boot.3nr` repair data available so host references inside installed plugins can be resolved.
 This is renamed to something identifiable allowing fastboot firm switching compatibility.
 
-## Status
 
-3NX SysPlugins are currently an experimental extension to Nexus3DS and are under active development.
+
+3NX Sysplugins are currently an experimental extension to Nexus3DS and are under active development.
