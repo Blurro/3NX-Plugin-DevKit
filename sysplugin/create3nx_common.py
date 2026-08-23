@@ -11,7 +11,7 @@ import subprocess
 from binutils_elf import find_tool, read_sections, read_symbols, read_relocations
 from stable_abi import SYMBOL_TYPE_TO_KIND, symbol_key
 
-HEADER_SIZE = 0x2C
+HEADER_SIZE = 0x30
 EXPORT_SIZE = 0x0C
 MAX_ALLOWED_REFS = 31
 R_ARM_ABS32 = 2
@@ -423,7 +423,7 @@ def build_module(module_name, plugin_magic, plugin_defs):
         own_abi = int.from_bytes(hashlib.sha256(abi_payload).digest()[:8], "little") & 0xFFFFFFFFFFFFFFFE
 
         out = bytearray(struct.pack(
-            "<IIIIIIIQQ",
+            "<IIIIIIIQQI",
             plugin_magic,
             plugin_id_u32(current_plugin),
             code_size,
@@ -432,6 +432,7 @@ def build_module(module_name, plugin_magic, plugin_defs):
             len(fast),
             len(repair),
             own_abi,
+            0,
             0,
         ))
         if len(out) != HEADER_SIZE:

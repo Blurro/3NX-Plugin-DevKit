@@ -62,22 +62,37 @@ fi
 ROSALINA_PLUGIN_CONFIG=(
     #"blur|blurPLGbase|10|"
     #"coin|coinrosalina|50|blur"
-    #"ctgp|ctgp|50|blur"
 )
 
 LOADER_PLUGIN_CONFIG=(
     #"coin|coinloader|50|"
 )
 
+# Optional metadata is appended to one single-entry .3nx after its normal 16-byte body padding.
+# Each entry is:
+#   "plugin_name|file1|file2|..."
+# plugin_name is the configured output_name, or the base name of exactly one completed
+# plugin_name.<priority>.3nx beside this script. Metadata files must also be beside this script.
+# Files are concatenated in listed order with no gaps, then the combined metadata is padded to 16 bytes.
+# Re-running replaces that plugin's previous metadata. Already-stacked .3nx targets are warned and dropped.
+METADATA_CONFIG=(
+    #"blurPLGbase|metadata.bin"
+    #"coinrosalina|metadata.bin|icon.bin"
+)
+
 # Tip: 3nx file data can be stacked, to make one .3nx file hold multiple plugins. Place generated .3nx files at SD:/luma/plugins/
 # Stacked plugins in order of pluginA then pluginB, function the same as pluginA.1.3nx then pluginB.2.3nx
-# A stack may contain any two or more output names. Configured members use the files built by this run, stacked by config priorities.
-# Other non-config members are stacked by lowest-priority completed output_name.<priority>.3nx beside this script (then by filename).
-# Already-stacked non-config inputs are warned and dropped. Module+ID dupes fail the stack.
+# Each stack entry is:
+#   "output_name|priority|plugin_name,plugin_name[,...]"
+# Leave priority empty to keep the existing behavior of using the lowest member priority.
+# A supplied priority controls only the created stack filename; member ordering still follows member priorities.
+# Configured members use the files built by this run, stacked by config priorities.
+# Other non-config members use the single completed output_name.<priority>.3nx beside this script.
+# Already-stacked inputs are warned and dropped; module+ID duplicates fail the stack.
 
 STACKED_PLUGIN_CONFIG=(
-    #"PlaycoinBoth|coinloader,coinrosalina"
-    #"Playcoinz|blurPLGbase,coinloader,coinrosalina"
+    #"PlaycoinBoth||coinloader,coinrosalina"
+    #"Playcoinz|10|blurPLGbase,coinloader,coinrosalina"
 )
 
 # USEFUL MARKER AND COMPILER INFORMATION!!!
@@ -133,9 +148,10 @@ PY_START_MARKER="#makepluginstart#"
 PY_END_MARKER="#makepluginend#"
 
 total_config_count=$((${#ROSALINA_PLUGIN_CONFIG[@]} + ${#LOADER_PLUGIN_CONFIG[@]}))
+total_metadata_count=${#METADATA_CONFIG[@]}
 total_stack_count=${#STACKED_PLUGIN_CONFIG[@]}
 
-if [[ "$total_config_count" -eq 0 && "$total_stack_count" -eq 0 ]]; then
+if [[ "$total_config_count" -eq 0 && "$total_metadata_count" -eq 0 && "$total_stack_count" -eq 0 ]]; then
     printf '\n'
     printf '========================================\n'
     printf '========= No plugins to build! =========\n'
@@ -179,6 +195,15 @@ declare -A PLUGIN_OUTPUT_PRIORITIES=()
 declare -A PLUGIN_OUTPUT_MODULES=()
 declare -A PLUGIN_OUTPUT_NAMES=()
 declare -A PLUGIN_OUTPUT_IDS=()
+declare -A METADATA_TARGET_OUTPUTS=()
+declare -A METADATA_TARGET_KINDS=()
+declare -A METADATA_TARGET_SOURCES=()
+declare -A METADATA_TARGET_SIZES=()
+declare -A METADATA_TARGET_HASHES=()
+declare -A METADATA_TARGET_IDENTITIES=()
+declare -A METADATA_TARGET_FILES=()
+METADATA_TARGET_KEYS=()
+METADATA_NONCONFIG_OUTPUTS=()
 declare -A STACKED_MEMBER_OUTPUTS=()
 declare -A STACKED_MEMBER_COUNTS=()
 declare -A STACKED_MEMBER_SOURCES=()
@@ -208,7 +233,7 @@ import sys
 path = pathlib.Path(sys.argv[1])
 data = path.read_bytes()
 module_names = {0x24584E33: "rosalina", 0x25584E33: "loader"}
-HEADER_SIZE = 0x2C
+HEADER_SIZE = 0x30
 entries = []
 pos = 0
 
@@ -219,7 +244,7 @@ while pos < len(data):
     if len(data) - pos < HEADER_SIZE:
         raise SystemExit(f"ERROR: truncated .3nx entry header at 0x{pos:X}: {path}")
 
-    magic, _pid_word, code_size, data_size, _bss_size, reloc_size, repair_size, _abi_lo, _abi_hi, _env_lo, _env_hi = struct.unpack_from("<11I", data, pos)
+    magic, _pid_word, code_size, data_size, _bss_size, reloc_size, repair_size, _abi_lo, _abi_hi, _env_lo, _env_hi, metadata_size = struct.unpack_from("<12I", data, pos)
     if magic not in module_names or code_size == 0:
         raise SystemExit(f"ERROR: invalid .3nx header at 0x{pos:X}: {path}")
 
@@ -232,8 +257,11 @@ while pos < len(data):
         raise SystemExit(f"ERROR: invalid .3nx plugin ID '{plugin_id}' at 0x{pos + 4:X}: {path}")
 
     raw_end = pos + HEADER_SIZE + reloc_size + code_size + data_size + repair_size
-    entry_end = (raw_end + 0xF) & ~0xF
-    if raw_end < pos or entry_end <= pos or entry_end > len(data):
+    body_end = (raw_end + 0xF) & ~0xF
+    entry_end = body_end + metadata_size
+    if metadata_size & 0xF:
+        raise SystemExit(f"ERROR: metadata size is not 16-byte aligned at 0x{pos:X}: {path}")
+    if raw_end < pos or body_end < raw_end or entry_end < body_end or entry_end <= pos or entry_end > len(data):
         raise SystemExit(f"ERROR: truncated/overflowed .3nx entry at 0x{pos:X}: {path}")
 
     q = pos + HEADER_SIZE
@@ -295,18 +323,6 @@ write_state() {
     printf '%s' "$value" > "$path"
 }
 
-trim_final_line_endings() {
-    local path="$1"
-    local last_byte
-
-    while [[ -s "$path" ]]; do
-        last_byte="$(LC_ALL=C tail -c 1 -- "$path" | od -An -tu1 | tr -d '[:space:]')"
-        if [[ "$last_byte" != "10" && "$last_byte" != "13" ]]; then
-            break
-        fi
-        truncate -s -1 -- "$path"
-    done
-}
 
 replace_between_markers() {
     local target_file="$1"
@@ -369,7 +385,6 @@ replace_between_markers() {
 
     chmod --reference="$target_file" "$tmp_file"
     mv "$tmp_file" "$target_file"
-    trim_final_line_endings "$target_file"
 }
 
 process_module_plugins() {
@@ -717,8 +732,9 @@ normalize_stack_priority() {
     printf '%s' "$normalized"
 }
 
-resolve_nonconfig_stack_member() {
+resolve_nonconfig_plugin_file() {
     local member_name="$1"
+    local purpose="$2"
     local candidate
     local candidate_count=0
     local selected_path=""
@@ -737,8 +753,8 @@ resolve_nonconfig_stack_member() {
 
         local priority
         if ! priority="$(normalize_stack_priority "$priority_part")"; then
-            printf "ERROR: stack member '%s' has out-of-range priority in filename: %s\n" \
-                "$member_name" "$basename" >&2
+            printf "ERROR: %s '%s' has out-of-range priority in filename: %s\n" \
+                "$purpose" "$member_name" "$basename" >&2
             exit 1
         fi
 
@@ -754,13 +770,13 @@ resolve_nonconfig_stack_member() {
     done
 
     if [[ "$candidate_count" -eq 0 ]]; then
-        printf "ERROR: stack member '%s' is not being built and no completed %s.<priority>.3nx exists beside makeplugin.sh\n" \
-            "$member_name" "$member_name" >&2
+        printf "ERROR: %s '%s' is not being built and no completed %s.<priority>.3nx exists beside makeplugin.sh\n" \
+            "$purpose" "$member_name" "$member_name" >&2
         exit 1
     fi
 
     if [[ "$candidate_count" -gt 1 ]]; then
-        printf "ERROR: stack member '%s' matches multiple completed files; keep exactly one:\n" "$member_name" >&2
+        printf "ERROR: %s '%s' matches multiple completed files; keep exactly one:\n" "$purpose" "$member_name" >&2
         local candidate_file
         for candidate_file in "${candidate_files[@]}"; do
             printf "  %s\n" "$candidate_file" >&2
@@ -778,19 +794,198 @@ resolve_nonconfig_stack_member() {
     NONCONFIG_STACK_IDENTITIES="$INSPECTED_STACK_IDENTITIES"
 }
 
+prepare_metadata_outputs() {
+    local entry
+
+    for entry in "${METADATA_CONFIG[@]}"; do
+        local fields=()
+        IFS='|' read -ra fields <<< "$entry"
+        if [[ ${#fields[@]} -lt 2 ]]; then
+            printf 'bad metadata config %q: expected plugin_name|file1[|file2|...]\n' "$entry" >&2
+            exit 1
+        fi
+
+        local plugin_name
+        plugin_name="$(trim "${fields[0]}")"
+        if [[ ! "$plugin_name" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            printf "bad metadata plugin_name '%s': use only A-Z, a-z, 0-9, _, ., -\n" "$plugin_name" >&2
+            exit 1
+        fi
+
+        local plugin_key="${plugin_name,,}"
+        if [[ -n "${METADATA_TARGET_OUTPUTS[$plugin_key]+present}" ]]; then
+            printf "bad metadata config: duplicate plugin_name '%s'\n" "$plugin_name" >&2
+            exit 1
+        fi
+
+        local metadata_paths=()
+        local field_index
+        for ((field_index = 1; field_index < ${#fields[@]}; field_index++)); do
+            local metadata_name
+            metadata_name="$(trim "${fields[$field_index]}")"
+            if [[ -z "$metadata_name" || "$metadata_name" == */* || "$metadata_name" == "." || "$metadata_name" == ".." ]]; then
+                printf "bad metadata file '%s' for '%s': file must be directly beside makeplugin.sh\n" \
+                    "$metadata_name" "$plugin_name" >&2
+                exit 1
+            fi
+
+            local metadata_path="${ROOT_DIR}/${metadata_name}"
+            if [[ ! -f "$metadata_path" ]]; then
+                printf "ERROR: metadata file '%s' for '%s' is missing beside makeplugin.sh\n" \
+                    "$metadata_name" "$plugin_name" >&2
+                exit 1
+            fi
+            metadata_paths+=("$metadata_path")
+        done
+
+        if [[ ${#metadata_paths[@]} -eq 0 ]]; then
+            printf "bad metadata config for '%s': at least one metadata file is required\n" "$plugin_name" >&2
+            exit 1
+        fi
+
+        local kind
+        local output_file
+        local source
+        local source_size="-"
+        local source_hash="-"
+        local identity
+
+        if [[ -n "${PLUGIN_OUTPUT_FILES[$plugin_key]+present}" ]]; then
+            kind="generated"
+            output_file="${PLUGIN_OUTPUT_FILES[$plugin_key]}"
+            source="$output_file"
+            identity="${PLUGIN_OUTPUT_MODULES[$plugin_key]}:${PLUGIN_OUTPUT_IDS[$plugin_key]}"
+        else
+            resolve_nonconfig_plugin_file "$plugin_name" "metadata target"
+            if [[ "$NONCONFIG_STACK_ENTRY_COUNT" -ne 1 ]]; then
+                printf "WARNING: metadata target '%s' dropped: %s already contains %s .3nx entries\n" \
+                    "$plugin_name" "${NONCONFIG_STACK_SOURCE##*/}" "$NONCONFIG_STACK_ENTRY_COUNT" >&2
+                continue
+            fi
+
+            kind="nonconfig"
+            output_file="${NONCONFIG_STACK_SOURCE##*/}"
+            source="$NONCONFIG_STACK_SOURCE"
+            source_size="$NONCONFIG_STACK_SIZE"
+            source_hash="$NONCONFIG_STACK_HASH"
+            identity="$NONCONFIG_STACK_IDENTITIES"
+            METADATA_NONCONFIG_OUTPUTS+=("$output_file")
+        fi
+
+        local joined_metadata=""
+        local metadata_path
+        for metadata_path in "${metadata_paths[@]}"; do
+            if [[ -z "$joined_metadata" ]]; then
+                joined_metadata="$metadata_path"
+            else
+                joined_metadata+=$'\034'"$metadata_path"
+            fi
+        done
+
+        METADATA_TARGET_KEYS+=("$plugin_key")
+        METADATA_TARGET_OUTPUTS["$plugin_key"]="$output_file"
+        METADATA_TARGET_KINDS["$plugin_key"]="$kind"
+        METADATA_TARGET_SOURCES["$plugin_key"]="$source"
+        METADATA_TARGET_SIZES["$plugin_key"]="$source_size"
+        METADATA_TARGET_HASHES["$plugin_key"]="$source_hash"
+        METADATA_TARGET_IDENTITIES["$plugin_key"]="$identity"
+        METADATA_TARGET_FILES["$plugin_key"]="$joined_metadata"
+    done
+}
+
+rewrite_3nx_metadata() {
+    local path="$1"
+    shift
+
+    python3 - "$path" "$@" <<'PYMETA'
+import pathlib
+import struct
+import sys
+
+path = pathlib.Path(sys.argv[1])
+metadata_files = [pathlib.Path(arg) for arg in sys.argv[2:]]
+data = bytearray(path.read_bytes())
+HEADER_SIZE = 0x30
+METADATA_SIZE_OFFSET = 0x2C
+
+if len(data) < HEADER_SIZE:
+    raise SystemExit(f"ERROR: truncated .3nx metadata target: {path}")
+
+header = struct.unpack_from("<12I", data, 0)
+magic, _pid, code_size, data_size, _bss_size, reloc_size, repair_size = header[:7]
+old_metadata_size = header[11]
+if magic not in (0x24584E33, 0x25584E33) or code_size == 0:
+    raise SystemExit(f"ERROR: invalid .3nx metadata target: {path}")
+
+raw_end = HEADER_SIZE + reloc_size + code_size + data_size + repair_size
+body_end = (raw_end + 0xF) & ~0xF
+old_end = body_end + old_metadata_size
+if old_metadata_size & 0xF or raw_end > body_end or old_end != len(data):
+    raise SystemExit(f"ERROR: metadata target is malformed or stacked: {path}")
+
+metadata = bytearray()
+for metadata_file in metadata_files:
+    metadata += metadata_file.read_bytes()
+
+metadata_size = (len(metadata) + 0xF) & ~0xF
+if metadata_size > 0xFFFFFFFF:
+    raise SystemExit(f"ERROR: metadata is too large for .3nx header: {metadata_size} bytes")
+
+out = data[:body_end]
+struct.pack_into("<I", out, METADATA_SIZE_OFFSET, metadata_size)
+out += metadata
+out += b"\0" * (metadata_size - len(metadata))
+path.write_bytes(out)
+print(metadata_size)
+PYMETA
+}
+
 prepare_stacked_outputs() {
     local entry
 
     for entry in "${STACKED_PLUGIN_CONFIG[@]}"; do
-        if [[ "$entry" != *"|"* || "${entry#*|}" == *"|"* ]]; then
-            printf 'bad stacked plugin config %q: expected output_name|plugin_name,plugin_name[,...]\n' "$entry" >&2
+        local stacked_name
+        local stack_priority
+        local members
+        local first_rest
+
+        if [[ "$entry" != *"|"* ]]; then
+            printf 'bad stacked plugin config %q: expected output_name|priority|plugin_name,plugin_name[,...]\n' "$entry" >&2
             exit 1
         fi
 
-        local stacked_name="${entry%%|*}"
-        local members="${entry#*|}"
+        stacked_name="${entry%%|*}"
+        first_rest="${entry#*|}"
+        if [[ "$first_rest" == *"|"* ]]; then
+            stack_priority="${first_rest%%|*}"
+            members="${first_rest#*|}"
+            if [[ "$members" == *"|"* ]]; then
+                printf 'bad stacked plugin config %q: expected output_name|priority|plugin_name,plugin_name[,...]\n' "$entry" >&2
+                exit 1
+            fi
+        else
+            # Backward-compatible old form: output_name|members means empty priority.
+            stack_priority=""
+            members="$first_rest"
+        fi
+
         stacked_name="$(trim "$stacked_name")"
+        stack_priority="$(trim "$stack_priority")"
         members="$(trim "$members")"
+
+        if [[ -n "$stack_priority" ]]; then
+            if [[ ! "$stack_priority" =~ ^[0-9]+$ ]]; then
+                printf "bad stacked priority '%s' for '%s': must be a non-negative integer or empty\n" \
+                    "$stack_priority" "$stacked_name" >&2
+                exit 1
+            fi
+            local raw_stack_priority="$stack_priority"
+            if ! stack_priority="$(normalize_stack_priority "$raw_stack_priority")"; then
+                printf "bad stacked priority '%s' for '%s': maximum is 4294967295\n" \
+                    "$raw_stack_priority" "$stacked_name" >&2
+                exit 1
+            fi
+        fi
 
         if [[ ! "$stacked_name" =~ ^[A-Za-z0-9_.-]+$ ]]; then
             printf "bad stacked output_name '%s': use only A-Z, a-z, 0-9, _, ., -\n" "$stacked_name" >&2
@@ -856,8 +1051,7 @@ prepare_stacked_outputs() {
                 identity="${PLUGIN_OUTPUT_MODULES[$member_key]}:${PLUGIN_OUTPUT_IDS[$member_key]}"
                 display_file="$source"
             else
-                kind="nonconfig"
-                resolve_nonconfig_stack_member "$member_name"
+                resolve_nonconfig_plugin_file "$member_name" "stack member"
                 source="$NONCONFIG_STACK_SOURCE"
                 priority="$NONCONFIG_STACK_PRIORITY"
                 size="$NONCONFIG_STACK_SIZE"
@@ -871,6 +1065,15 @@ prepare_stacked_outputs() {
                 fi
 
                 identity="$NONCONFIG_STACK_IDENTITIES"
+                if [[ -n "${METADATA_TARGET_OUTPUTS[$member_key]+present}" && \
+                      "${METADATA_TARGET_KINDS[$member_key]}" == "nonconfig" ]]; then
+                    kind="metadata"
+                    source="${METADATA_TARGET_OUTPUTS[$member_key]}"
+                    size="-"
+                    hash="-"
+                else
+                    kind="nonconfig"
+                fi
             fi
 
             identity_counts["$identity"]=$(( ${identity_counts[$identity]:-0} + 1 ))
@@ -965,7 +1168,18 @@ prepare_stacked_outputs() {
 
         STACKED_MEMBER_COUNTS["$stack_index"]="$member_index"
 
-        local final_name="${stacked_name}.${lowest_priority}.3nx"
+        local final_priority="$lowest_priority"
+        if [[ -n "$stack_priority" ]]; then
+            final_priority="$stack_priority"
+        fi
+        local final_name="${stacked_name}.${final_priority}.3nx"
+        local metadata_output
+        for metadata_output in "${METADATA_NONCONFIG_OUTPUTS[@]}"; do
+            if [[ "$final_name" == "$metadata_output" ]]; then
+                printf "bad stacked output filename '%s': collides with metadata-updated plugin output\n" "$final_name" >&2
+                exit 1
+            fi
+        done
         if [[ ${#final_name} -ge 256 ]]; then
             printf "bad stacked output filename '%s': must be shorter than 256 ASCII bytes\n" "$final_name" >&2
             exit 1
@@ -984,6 +1198,7 @@ prepare_stacked_outputs() {
 
     PUBLISHED_OUTPUTS=(
         "${PUBLISHED_INDIVIDUAL_OUTPUTS[@]}"
+        "${METADATA_NONCONFIG_OUTPUTS[@]}"
         "${STACKED_OUTPUT_FILES[@]}"
     )
 }
@@ -991,6 +1206,7 @@ prepare_stacked_outputs() {
 process_module_plugins "rosalina" ROSALINA_PLUGIN_CONFIG
 process_module_plugins "loader" LOADER_PLUGIN_CONFIG
 
+prepare_metadata_outputs
 prepare_stacked_outputs
 
 printf '\n'
@@ -1003,7 +1219,7 @@ fi
 
 total_emit_count=$((MODULE_EMIT_COUNTS[rosalina] + MODULE_EMIT_COUNTS[loader]))
 if [[ "$total_emit_count" -eq 0 && "$total_config_count" -eq 0 ]]; then
-    printf 'No module plugins configured; explicitly named completed .3nx files will be used as stack members.\n\n'
+    printf 'No module plugins configured; completed .3nx files will be used for configured metadata/stack operations.\n\n'
 elif [[ ${#BUILD_REASONS[@]} -gt 0 ]]; then
     printf 'Clean module build required:\n'
     for reason in "${BUILD_REASONS[@]}"; do
@@ -1099,21 +1315,64 @@ for output_name in "${GENERATED_OUTPUTS[@]}"; do
     fi
 done
 
-verify_nonconfig_stack_source() {
+verify_nonconfig_source() {
     local source_path="$1"
     local expected_size="$2"
     local expected_hash="$3"
+    local purpose="$4"
 
     if [[ ! -f "$source_path" ]]; then
-        printf 'ERROR: non-config stack member disappeared after validation: %s\n' "$source_path" >&2
+        printf 'ERROR: %s disappeared after validation: %s\n' "$purpose" "$source_path" >&2
         exit 1
     fi
     if [[ "$(stat -c '%s' -- "$source_path")" != "$expected_size" ||
           "$(sha256sum "$source_path" | awk '{print $1}')" != "$expected_hash" ]]; then
-        printf 'ERROR: non-config stack member changed after validation: %s\n' "$source_path" >&2
+        printf 'ERROR: %s changed after validation: %s\n' "$purpose" "$source_path" >&2
         exit 1
     fi
 }
+
+for plugin_key in "${METADATA_TARGET_KEYS[@]}"; do
+    metadata_output="${METADATA_TARGET_OUTPUTS[$plugin_key]}"
+    metadata_kind="${METADATA_TARGET_KINDS[$plugin_key]}"
+    metadata_identity="${METADATA_TARGET_IDENTITIES[$plugin_key]}"
+    metadata_stage="${OUTPUT_STAGE}/${metadata_output}"
+
+    if [[ "$metadata_kind" == "generated" ]]; then
+        if [[ ! -f "$metadata_stage" ]]; then
+            printf 'ERROR: generated metadata target is missing from staging: %s\n' "$metadata_output" >&2
+            exit 1
+        fi
+    else
+        metadata_source="${METADATA_TARGET_SOURCES[$plugin_key]}"
+        verify_nonconfig_source \
+            "$metadata_source" \
+            "${METADATA_TARGET_SIZES[$plugin_key]}" \
+            "${METADATA_TARGET_HASHES[$plugin_key]}" \
+            "metadata target"
+        cp -- "$metadata_source" "$metadata_stage"
+    fi
+
+    inspect_stack_3nx "$metadata_stage"
+    if [[ "$INSPECTED_STACK_ENTRY_COUNT" -ne 1 ||
+          "$INSPECTED_STACK_IDENTITIES" != "$metadata_identity" ]]; then
+        printf 'ERROR: metadata target %s is not exactly the expected single plugin %s\n' \
+            "$metadata_output" "$metadata_identity" >&2
+        exit 1
+    fi
+
+    metadata_files=()
+    IFS=$'\034' read -ra metadata_files <<< "${METADATA_TARGET_FILES[$plugin_key]}"
+    metadata_size="$(rewrite_3nx_metadata "$metadata_stage" "${metadata_files[@]}")"
+
+    inspect_stack_3nx "$metadata_stage"
+    if [[ "$INSPECTED_STACK_ENTRY_COUNT" -ne 1 ||
+          "$INSPECTED_STACK_IDENTITIES" != "$metadata_identity" ]]; then
+        printf 'ERROR: metadata rewrite changed plugin identity for %s\n' "$metadata_output" >&2
+        exit 1
+    fi
+    printf 'Packed %s bytes of metadata into %s\n' "$metadata_size" "$metadata_output"
+done
 
 for i in "${!STACKED_OUTPUT_FILES[@]}"; do
     stack_path="${OUTPUT_STAGE}/${STACKED_OUTPUT_FILES[$i]}"
@@ -1124,24 +1383,26 @@ for i in "${!STACKED_OUTPUT_FILES[@]}"; do
         member_key="${i}:${member_index}"
         source="${STACKED_MEMBER_SOURCES[$member_key]}"
 
-        if [[ "${STACKED_MEMBER_KINDS[$member_key]}" == "staged" ]]; then
+        if [[ "${STACKED_MEMBER_KINDS[$member_key]}" == "staged" ||
+              "${STACKED_MEMBER_KINDS[$member_key]}" == "metadata" ]]; then
             source="${OUTPUT_STAGE}/${source}"
             if [[ ! -f "$source" ]]; then
-                printf 'ERROR: generated stack member is missing from staging: %s\n' "$source" >&2
+                printf 'ERROR: staged stack member is missing: %s\n' "$source" >&2
                 exit 1
             fi
             inspect_stack_3nx "$source"
             if [[ "$INSPECTED_STACK_ENTRY_COUNT" -ne 1 ||
                   "$INSPECTED_STACK_IDENTITIES" != "${STACKED_MEMBER_IDENTITIES[$member_key]}" ]]; then
-                printf 'ERROR: generated stack member %s does not contain exactly the expected identity %s\n' \
+                printf 'ERROR: staged stack member %s does not contain exactly the expected identity %s\n' \
                     "${STACKED_MEMBER_FILES[$member_key]}" "${STACKED_MEMBER_IDENTITIES[$member_key]}" >&2
                 exit 1
             fi
         else
-            verify_nonconfig_stack_source \
+            verify_nonconfig_source \
                 "$source" \
                 "${STACKED_MEMBER_SIZES[$member_key]}" \
-                "${STACKED_MEMBER_HASHES[$member_key]}"
+                "${STACKED_MEMBER_HASHES[$member_key]}" \
+                "non-config stack member"
         fi
 
         cat -- "$source" >> "$stack_path"
@@ -1176,6 +1437,11 @@ printf '\n'
 for output_name in "${PUBLISHED_INDIVIDUAL_OUTPUTS[@]}"; do
     mv -f -- "${OUTPUT_STAGE}/${output_name}" "${ROOT_DIR}/${output_name}"
     printf 'Wrote %s\n' "$output_name"
+done
+
+for output_name in "${METADATA_NONCONFIG_OUTPUTS[@]}"; do
+    mv -f -- "${OUTPUT_STAGE}/${output_name}" "${ROOT_DIR}/${output_name}"
+    printf 'Wrote metadata-updated %s\n' "$output_name"
 done
 
 for i in "${!STACKED_OUTPUT_FILES[@]}"; do
