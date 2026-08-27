@@ -1,6 +1,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import argparse
+import hashlib
 import json
 import sys
 
@@ -37,6 +38,23 @@ def fingerprint():
         SYPLUGIN_ROOT / "semantic_marker_plugin.cc",
     ]
     return marker_fingerprint(ROOT, extras)
+
+
+def source_fingerprints():
+    markers = scan_markers(ROOT)
+    paths = sorted({rec["path"] for rec in markers.values()}, key=lambda p: p.as_posix().casefold())
+    for path in paths:
+        rel = path.relative_to(ROOT).as_posix()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        print(f"{digest}\t{rel}")
+
+
+def compiler_plugin_fingerprint():
+    path = SYPLUGIN_ROOT / "semantic_marker_plugin.cc"
+    h = hashlib.sha256()
+    h.update(b"NEXUS_SEMANTIC_MARKER_COMPILER_SM3\0")
+    h.update(path.read_bytes())
+    return h.hexdigest()
 
 
 def prepare():
@@ -115,11 +133,17 @@ def main():
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--fingerprint", action="store_true")
+    mode.add_argument("--source-fingerprints", action="store_true")
+    mode.add_argument("--compiler-plugin-fingerprint", action="store_true")
     mode.add_argument("--prepare", action="store_true")
     mode.add_argument("--resolve", action="store_true")
     args = parser.parse_args()
     if args.fingerprint:
         print(fingerprint())
+    elif args.source_fingerprints:
+        source_fingerprints()
+    elif args.compiler_plugin_fingerprint:
+        print(compiler_plugin_fingerprint())
     elif args.prepare:
         prepare()
     else:

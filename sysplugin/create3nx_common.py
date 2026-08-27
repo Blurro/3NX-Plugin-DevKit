@@ -1,9 +1,9 @@
 from os import environ, replace
 from os.path import exists
 from pathlib import Path
+import json
 from tempfile import TemporaryDirectory
 import hashlib
-import json
 import re
 import struct
 import subprocess
@@ -85,6 +85,12 @@ def validate_addend(stype, size, sym_addr, word, label):
     return addend
 
 
+
+
+def direct_plugin_provider(name):
+    match = re.fullmatch(r"PLUGIN_([A-Za-z0-9_]{4})_.+", name or "")
+    return match.group(1) if match else None
+
 def build_module(module_name, plugin_magic, plugin_defs):
     new_elf = environ.get("NEXUS_3NX_INPUT_ELF", f"{module_name}.elf")
     marker_keys_path = "plgmarkers.keys"
@@ -123,10 +129,6 @@ def build_module(module_name, plugin_magic, plugin_defs):
         plugin_info[pid] = {"filename": filename, "allowed_refs": set(allowed_refs)}
 
     plugin_ids = list(plugin_info)
-    for pid, info in plugin_info.items():
-        for ref in info["allowed_refs"]:
-            if ref not in plugin_info:
-                raise SystemExit(f"bad allowed_refs for {pid}: unknown plugin {ref!r}")
 
     seg_names = []
     for pid in plugin_ids:
@@ -306,6 +308,29 @@ def build_module(module_name, plugin_magic, plugin_defs):
                 if sym_seg is None:
                     if rel_type != R_ARM_ABS32 or (patch_off & 3) or not sym.name:
                         raise SystemExit(f"unsupported host relocation for {sym.name!r} in {current_plugin}")
+
+                    # Undefined direct plugin symbols encode their provider in the
+                    # symbol name itself: PLUGIN_<4-char ID>_*.  Consumers mark the
+                    # undefined ELF symbol with its real type (.type ..., %function
+                    # for functions), so no external API/JSON manifest is needed.
+                    if sym["st_shndx"] == "SHN_UNDEF":
+                        provider = direct_plugin_provider(sym.name)
+                        if provider and provider != current_plugin and provider not in plugin_info:
+                            if provider not in plugin_info[current_plugin]["allowed_refs"]:
+                                raise SystemExit(f"forbidden plugin reference {current_plugin} -> {provider} ({sym.name})")
+                            stype = sym["st_info"]["type"]
+                            if stype not in SYMBOL_TYPE_TO_KIND:
+                                raise SystemExit(
+                                    f"external plugin symbol {sym.name!r} has untyped ELF symbol {stype}; "
+                                    f"declare its .type in the consumer source"
+                                )
+                            addend = validate_addend(stype, 0, 0, word, f"{provider}:{sym.name}")
+                            write_u32(blob, patch_off, addend)
+                            external_refs.setdefault(plugin_id_u32(provider), []).append(
+                                (patch_off, addend, symbol_key(stype, sym.name), addend)
+                            )
+                            continue
+
                     if sym.name in marker_keys:
                         key = marker_keys[sym.name]
                         if sym_addr != 0:

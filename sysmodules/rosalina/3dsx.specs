@@ -1,7 +1,7 @@
 %include <sync-dmb.specs>
 
 *link:
-+ -T ../3dsx.ld%s -d --emit-relocs --use-blx --gc-sections
++ -T ../3dsx.ld%s -d --emit-relocs --use-blx --gc-sections --unresolved-symbols=ignore-all
 
 *startfile:
 3dsx_crt0%O%s crti%O%s crtbegin%O%s
