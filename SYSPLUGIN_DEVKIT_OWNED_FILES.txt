@@ -1,0 +1,22 @@
+# Nexus3DS Sysplugin Dev Kit owned files.
+# Plugin overlays must not replace these files.
+# Exception: only the delimited CONFIG block in makeplugin.sh may be edited.
+Makefile
+SYSPLUGIN_DEVKIT_README.txt
+SYSPLUGIN_DEVKIT_OWNED_FILES.txt
+makeplugin.sh
+sysmodules/loader/3dsx.ld
+sysmodules/loader/3dsx.specs
+sysmodules/loader/create3nx.py
+sysmodules/loader/gen_plgmarkers.py
+sysmodules/loader/include/sysplugin_symbols.h
+sysmodules/rosalina/3dsx.ld
+sysmodules/rosalina/3dsx.specs
+sysmodules/rosalina/create3nx.py
+sysmodules/rosalina/gen_plgmarkers.py
+sysmodules/rosalina/include/sysplugin_menu.h
+sysmodules/rosalina/include/sysplugin_symbols.h
+sysplugin/create3nx_common.py
+sysplugin/include/sysplugin_plugin.h
+sysplugin/make_transient_3on.py
+sysplugin/compress_3on_lzss.py

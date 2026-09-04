@@ -4,7 +4,7 @@
 #include "sysplugin_symbols.h"
 
 #define SYSPLUGIN_MENU_PROVIDER_ID 0x554E454Du
-#define SYSPLUGIN_MENU_PUBLIC_API_REVISION 1u
+#define SYSPLUGIN_MENU_PUBLIC_API_REVISION 2u
 
 typedef struct PluginMenuRegistration
 {
@@ -24,7 +24,7 @@ typedef struct PluginMenuFileContext
     u32 metadataSize;
 } PluginMenuFileContext;
 
-/* Add MENU to allowed_refs in makeplugin.sh before importing these symbols. */
+// Add MENU to allowed_refs in makeplugin.sh before importing these symbols.
 bool PLUGIN_MENU_AddItem(PluginMenuRegistration *item, u32 pluginId, const char *title, void (*callback)(void), u32 color);
 bool PLUGIN_MENU_RemoveItem(PluginMenuRegistration *item);
 
@@ -38,6 +38,7 @@ void PLUGIN_MENU_ClosePluginFile(PluginMenuFileContext *context);
 
 bool PLUGIN_MENU_AddOnlineEntry(const char *title, const char *url);
 bool PLUGIN_MENU_RemoveOnlineEntry(const char *title);
+void PLUGIN_MENU_OpenOnlineSource(const char *url);
 
 bool PLUGIN_MENU_FindFreeRange(u32 size, u32 *outBase);
 bool PLUGIN_MENU_TempAlloc(u32 size, u32 *outBase);
@@ -53,6 +54,7 @@ NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_UnpackLz10File);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_ClosePluginFile);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_AddOnlineEntry);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_RemoveOnlineEntry);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_OpenOnlineSource);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_FindFreeRange);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_TempAlloc);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_TempFree);
