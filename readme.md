@@ -2,7 +2,7 @@
 
 <img width="341" height="174" alt="image" src="https://github.com/user-attachments/assets/8e180e74-a278-4d4c-97da-251bceee5a2a" />
 
-3NX Sysplugins add dynamically loaded plugins to [Nexus3DS](https://github.com/Blurro/Nexus3DS), allowing new features to be added to Loader or Rosalina without having to build everything directly into `boot.firm`.
+3NX Sysplugins add dynamically loaded plugins to [Nexus3DS](https://github.com/2b-zipper/Nexus3DS/tree/dev), allowing new features to be added to Loader or Rosalina without having to build everything directly into `boot.firm`.
 
 Plugins are relocatable, can be loaded together, reference each other, and use matching `3NR` data to repair references back into the Nexus3DS build they are running on.
 
