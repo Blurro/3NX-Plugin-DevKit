@@ -4,7 +4,9 @@
 
 .3NX Sysplugins (**3**DS **N**exus e**X**tension) add dynamically loaded plugins to [Nexus3DS](https://github.com/2b-zipper/Nexus3DS/tree/dev), allowing new features to be added to Loader or Rosalina without having to build everything directly into `boot.firm`.
 
-Plugins are relocatable, can be loaded together, reference each other, and use matching `3NR` data to repair references back into the Nexus3DS build they are running on.
+Plugins are relocatable, can be loaded together, reference each other, even survive updates by repairing themselves against one another and Nexus3DS.
+
+Check out my **[Sysplugin Showcase Presentation](https://blurro.github.io/sysplugins/Sysplugin%20Showcase.pdf)**
 
 ## Features
 
