@@ -16,10 +16,10 @@ Check out my **[Sysplugin Showcase Presentation](https://blurro.github.io/sysplu
 * Cross-plugin references and dependencies
 * Runtime host-symbol repair using matching `3NR` data
 * `PLG_MARKER` support for referencing internal Nexus3DS code without relying on fixed source locations
-* Plugin metadata packing
+* Plugin metadata packing - this allows any number of assets to be stored into a plugin file, this is not loaded to memory
 * Multiple plugins can be stacked into a single `.3nx`
 * Automatic rejection/unloading when plugins or their dependencies fail
-* Tools for creating transient `.3on` plugins
+* Tools for creating transient `.3on` plugins - see [Syplugin Menu](https://github.com/Blurro/MENU-Sysplugin-3DS) for uses (e.g. temporarily load code, add as online source)
 
 ## Using Sysplugins
 
@@ -34,6 +34,9 @@ Make sure **Load external FIRMs and modules** is enabled in the SELECT boot conf
 Plugins are selected automatically during boot. Lower priority numbers run first, with the filename and stack order used to resolve ties.
 
 Your active `boot.firm` must also have its matching `3NR` repair data available. Nexus3DS identifies this data for the current environment, allowing different compatible `boot.firm` builds to coexist when using things such as fastboot3DS.
+
+### Get the base [MENU Sysplugin here](https://github.com/Blurro/MENU-Sysplugin-3DS)
+Recommended for basic API functions (Rosalina side) and as an entry to your own Sysplugin's menu.
 
 [See my current Sysplugins here!](https://github.com/Blurro/Nexus3DS-Sysplugins)
 
