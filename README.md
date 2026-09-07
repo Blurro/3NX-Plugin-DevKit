@@ -11,7 +11,7 @@ Check out my **[Sysplugin Showcase Presentation](https://blurro.github.io/sysplu
 ## Features
 
 * Relocatable `.3nx` plugins
-* Loader and Rosalina plugin support
+* Loader and Rosalina targeted - these have the power to modify any other process
 * Multiple plugins loaded together, ordered by priority
 * Cross-plugin references and dependencies
 * Runtime host-symbol repair using matching `3NR` data
