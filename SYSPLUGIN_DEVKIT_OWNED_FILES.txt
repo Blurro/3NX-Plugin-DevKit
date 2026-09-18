@@ -9,6 +9,7 @@ sysmodules/loader/3dsx.ld
 sysmodules/loader/3dsx.specs
 sysmodules/loader/create3nx.py
 sysmodules/loader/gen_plgmarkers.py
+sysmodules/loader/include/sysplugin_menu.h
 sysmodules/loader/include/sysplugin_symbols.h
 sysmodules/rosalina/3dsx.ld
 sysmodules/rosalina/3dsx.specs

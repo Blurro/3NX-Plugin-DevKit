@@ -36,7 +36,7 @@ Plugins are selected automatically during boot. Lower priority numbers run first
 Your active `boot.firm` must also have its matching `3NR` repair data available. Nexus3DS identifies this data for the current environment, allowing different compatible `boot.firm` builds to coexist when using things such as fastboot3DS.
 
 ### Get the base [MENU Sysplugin here](https://github.com/Blurro/MENU-Sysplugin-3DS)
-Recommended for basic API functions (Rosalina side) and as an entry to your own Sysplugin's menu.
+Recommended for basic API functions and as an entry to your own Sysplugin's menu.
 
 [See my current Sysplugins here!](https://github.com/Blurro/Nexus3DS-Sysplugins)
 
@@ -156,7 +156,7 @@ Because `abcd` runs before `test`, it acts as a dependency. If the provider is r
 
 Public cross-plugin functions and objects should use the declarations/macros supplied by `sysplugin_symbols.h`, and relocatable calls should go through a repaired plugin table rather than directly branching to another plugin.
 
-Rosalina plugins can similarly reference the public MENU API through:
+Rosalina and Loader plugins can similarly reference the public MENU API through:
 
 ```c
 #include "sysplugin_menu.h"
@@ -164,7 +164,7 @@ Rosalina plugins can similarly reference the public MENU API through:
 
 and by adding `MENU` to their allowed references.
 
-Loader and Rosalina are separate plugin environments, so Loader plugins cannot reference Rosalina MENU.
+Loader and Rosalina are separate plugin environments, so the API may differ between them.
 
 </details>
 

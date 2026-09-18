@@ -5,6 +5,9 @@
 
 #define SYSPLUGIN_MENU_PROVIDER_ID 0x554E454Du
 #define SYSPLUGIN_MENU_PUBLIC_API_REVISION 2u
+#define SYSPLUGIN_MENU_BRIDGE_API_REVISION 1u
+#define SYSPLUGIN_MENU_MANAGE_API_REVISION 1u
+#define SYSPLUGIN_MENU_BRIDGE_MAX_PAYLOAD 0xC0u
 
 typedef struct PluginMenuRegistration
 {
@@ -23,6 +26,15 @@ typedef struct PluginMenuFileContext
     u32 metadataOffset;
     u32 metadataSize;
 } PluginMenuFileContext;
+
+typedef bool (*PluginMenuBridgeReceiverCallback)(u32 command, const void *payload, u32 payloadSize);
+
+typedef struct PluginMenuBridgeRegistration
+{
+    u32 pluginId;
+    PluginMenuBridgeReceiverCallback callback;
+    struct PluginMenuBridgeRegistration *next;
+} PluginMenuBridgeRegistration;
 
 // Add MENU to allowed_refs in makeplugin.sh before importing these symbols.
 bool PLUGIN_MENU_AddItem(PluginMenuRegistration *item, u32 pluginId, const char *title, void (*callback)(void), u32 color);
@@ -43,6 +55,16 @@ void PLUGIN_MENU_OpenOnlineSource(const char *url);
 bool PLUGIN_MENU_FindFreeRange(u32 size, u32 *outBase);
 bool PLUGIN_MENU_TempAlloc(u32 size, u32 *outBase);
 void PLUGIN_MENU_TempFree(u32 base, u32 size);
+bool PLUGIN_MENU_MapPage(Handle sourceProcess, u32 sourceAddress, u32 *mappedBase, u32 *mappedAddress);
+void PLUGIN_MENU_UnmapPage(u32 mappedBase);
+
+bool PLUGIN_MENU_RegisterBridgeReceiver(PluginMenuBridgeRegistration *registration);
+bool PLUGIN_MENU_UnregisterBridgeReceiver(PluginMenuBridgeRegistration *registration);
+
+bool PLUGIN_MENU_AddSysplugin(const char *name);
+bool PLUGIN_MENU_DisableSysplugin(const char *name);
+bool PLUGIN_MENU_EnableSysplugin(const char *name);
+bool PLUGIN_MENU_DeleteSysplugin(const char *name);
 
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_AddItem);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_RemoveItem);
@@ -58,3 +80,11 @@ NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_OpenOnlineSource);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_FindFreeRange);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_TempAlloc);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_TempFree);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_MapPage);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_UnmapPage);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_RegisterBridgeReceiver);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_UnregisterBridgeReceiver);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_AddSysplugin);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_DisableSysplugin);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_EnableSysplugin);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_DeleteSysplugin);

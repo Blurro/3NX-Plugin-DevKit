@@ -76,16 +76,13 @@ another plugin.
 
 MENU API
 --------
-Rosalina plugins can use the public MENU API with:
+Rosalina and Loader plugins can use a sysmodule-respective public MENU API with:
 
     #include "sysplugin_menu.h"
 
 and MENU in that plugin's allowed_refs.
 
-You do not need MENU's implementation source to build against it.
-
-Loader plugins cannot use the Rosalina MENU API because Loader and Rosalina
-are separate plugin environments.
+You do not need MENU's source to build against it.
 
 
 Transient .3on tools
