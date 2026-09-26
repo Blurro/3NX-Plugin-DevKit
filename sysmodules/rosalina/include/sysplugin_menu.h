@@ -4,7 +4,7 @@
 #include "sysplugin_symbols.h"
 
 #define SYSPLUGIN_MENU_PROVIDER_ID 0x554E454Du
-#define SYSPLUGIN_MENU_PUBLIC_API_REVISION 2u
+#define SYSPLUGIN_MENU_PUBLIC_API_REVISION 3u
 #define SYSPLUGIN_MENU_BRIDGE_API_REVISION 1u
 #define SYSPLUGIN_MENU_MANAGE_API_REVISION 1u
 #define SYSPLUGIN_MENU_BRIDGE_MAX_PAYLOAD 0xC0u
@@ -45,6 +45,7 @@ bool PLUGIN_MENU_LoadData(u32 pluginId, void *data, u32 size);
 bool PLUGIN_MENU_SaveData(u32 pluginId, const void *data, u32 size);
 
 bool PLUGIN_MENU_OpenPluginFile(u32 pluginId, PluginMenuFileContext *context);
+Result PLUGIN_MENU_ExtractRawFile(const PluginMenuFileContext *source, u32 sourceOffset, u32 sourceSize, const char *outputPath);
 Result PLUGIN_MENU_UnpackLz10File(const PluginMenuFileContext *source, u32 compressedOffset, u32 compressedSize, const char *outputPath);
 void PLUGIN_MENU_ClosePluginFile(PluginMenuFileContext *context);
 
@@ -72,6 +73,7 @@ NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_GetDataSize);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_LoadData);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_SaveData);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_OpenPluginFile);
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_ExtractRawFile);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_UnpackLz10File);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_ClosePluginFile);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_AddOnlineEntry);
