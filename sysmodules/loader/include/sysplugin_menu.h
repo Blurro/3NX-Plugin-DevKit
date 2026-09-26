@@ -43,6 +43,8 @@ typedef struct PluginMenuLoaderHomePatch
     struct PluginMenuLoaderHomePatch *next;
 } PluginMenuLoaderHomePatch;
 
+u32 PLUGIN_MENU_GetApiVersion(void);
+
 bool PLUGIN_MENU_FindFreeRange(u32 size, u32 *outBase);
 bool PLUGIN_MENU_TempAlloc(u32 size, u32 *outBase);
 void PLUGIN_MENU_TempFree(u32 base, u32 size);
@@ -55,6 +57,7 @@ bool PLUGIN_MENU_RegisterHomePatch(PluginMenuLoaderHomePatch *registration);
 bool PLUGIN_MENU_UnregisterHomePatch(PluginMenuLoaderHomePatch *registration);
 bool PLUGIN_MENU_BridgeSend(u32 targetPluginId, u32 command, const void *payload, u32 payloadSize);
 
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_GetApiVersion);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_FindFreeRange);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_TempAlloc);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_TempFree);

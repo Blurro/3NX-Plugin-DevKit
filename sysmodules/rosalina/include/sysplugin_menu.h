@@ -37,6 +37,8 @@ typedef struct PluginMenuBridgeRegistration
 } PluginMenuBridgeRegistration;
 
 // Add MENU to allowed_refs in makeplugin.sh before importing these symbols.
+u32 PLUGIN_MENU_GetApiVersion(void);
+
 bool PLUGIN_MENU_AddItem(PluginMenuRegistration *item, u32 pluginId, const char *title, void (*callback)(void), u32 color);
 bool PLUGIN_MENU_RemoveItem(PluginMenuRegistration *item);
 
@@ -67,6 +69,7 @@ bool PLUGIN_MENU_DisableSysplugin(const char *name);
 bool PLUGIN_MENU_EnableSysplugin(const char *name);
 bool PLUGIN_MENU_DeleteSysplugin(const char *name);
 
+NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_GetApiVersion);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_AddItem);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_RemoveItem);
 NEXUS_PLUGIN_EXTERNAL_FUNC(PLUGIN_MENU_GetDataSize);
