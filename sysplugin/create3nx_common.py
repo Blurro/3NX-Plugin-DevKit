@@ -362,6 +362,7 @@ def build_module(module_name, plugin_magic, plugin_defs):
                     target_off = word - plugin_start
                     if target_off < 0 or (target_off & ~1) >= plugin_runtime_span_by_id[current_plugin]:
                         raise SystemExit(f"self target outside {current_plugin} image")
+                    write_u32(blob, patch_off, target_off)
                     self_refs.append((patch_off, target_off))
                     continue
 
@@ -376,6 +377,7 @@ def build_module(module_name, plugin_magic, plugin_defs):
                 target_off = export_value + addend
                 if (target_off & ~1) >= plugin_runtime_span_by_id[target_plugin]:
                     raise SystemExit(f"target outside {target_plugin} image")
+                write_u32(blob, patch_off, target_off)
                 external_refs.setdefault(plugin_id_u32(target_plugin), []).append((patch_off, target_off, symbol_key(stype, sym.name), addend))
 
         fast = bytearray()
