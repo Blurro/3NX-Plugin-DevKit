@@ -216,10 +216,4 @@ The individual plugins still retain their own module, ID and execution ordering.
 
 </details>
 
-## Dev Kit Notes
-
-The first plugin build automatically generates the Nexus3DS sysplugin entry header if it does not already exist. Temporary build state used for this is cleaned up automatically.
-
-`makeplugin.sh` also handles incremental builds, semantic marker generation, relinking when needed, `.3nx` creation, metadata and stacking. You should not need to manually invoke the individual generator scripts during normal plugin development.
-
-3NX Sysplugins and their development tools are still under active development, so the format/API may continue to evolve.
+3NX Sysplugins and their development tools are still under active development, so this kit and API may continue to evolve.
