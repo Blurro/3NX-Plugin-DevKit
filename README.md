@@ -42,7 +42,7 @@ Recommended for basic API functions and as an entry to your own Sysplugin's menu
 
 ## Plugin Development
 
-The dev kit is designed to be placed over a **clean, unbuilt, sysplugin-capable Nexus3DS source tree**.
+The dev kit is designed to be placed over a **clean, unbuilt, [Nexus3DS](https://github.com/2b-zipper/Nexus3DS/tree/dev) clone**.<br>*Currently /dev/ branch contains the latest*
 
 Then place your plugin's source/assets over that and configure the `CONFIG` block near the top of `makeplugin.sh`.
 
