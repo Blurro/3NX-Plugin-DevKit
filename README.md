@@ -99,7 +99,7 @@ SYSPLUGIN_DEVKIT_OWNED_FILES.txt
 
 should **not** be copied or modified by individual plugin projects.
 
-The one intentional exception is the delimited `CONFIG` block inside `makeplugin.sh`.
+The one intentional exception is the `CONFIG` block inside `makeplugin.sh`.
 
 A plugin overlay should generally only contain:
 
@@ -108,8 +108,6 @@ A plugin overlay should generally only contain:
 * Its own assets
 * Plugin-specific preparation scripts if needed
 * Its configuration changes to `makeplugin.sh`
-
-This means plugins don't each carry around slightly different copies of the linker scripts, 3NX generator or shared headers and then mysteriously explode six months later when one copy becomes outdated.
 
 The dev kit also provides the standard section macros:
 
@@ -173,11 +171,13 @@ Loader and Rosalina are separate plugin environments, so the API may differ betw
 
 A plugin can reference locations inside Nexus3DS itself without hardcoding an address.
 
-`PLG_MARKER` is placed after an existing semantic piece of host code:
+`PLG_MARKER` is placed after an existing piece of host code:
 
 ```c
 existing_code(); // PLG_MARKER(example_marker)
 ```
+
+(See makeplugin.sh config for more valid examples)
 
 The dev kit uses GCC and DWARF information to identify that construct and records its linked address in the matching `3NR`.
 
