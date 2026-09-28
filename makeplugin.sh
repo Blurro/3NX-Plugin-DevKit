@@ -247,7 +247,6 @@ declare -A OUTPUT_OWNERS=()
 declare -A PLUGIN_OUTPUT_FILES=()
 declare -A PLUGIN_OUTPUT_PRIORITIES=()
 declare -A PLUGIN_OUTPUT_MODULES=()
-declare -A PLUGIN_OUTPUT_NAMES=()
 declare -A PLUGIN_OUTPUT_IDS=()
 declare -A METADATA_TARGET_OUTPUTS=()
 declare -A METADATA_TARGET_KINDS=()
@@ -315,8 +314,8 @@ while pos < len(data):
     entry_end = body_end + metadata_size
     if metadata_size & 0xF:
         raise SystemExit(f"ERROR: metadata size is not 16-byte aligned at 0x{pos:X}: {path}")
-    if raw_end < pos or body_end < raw_end or entry_end < body_end or entry_end <= pos or entry_end > len(data):
-        raise SystemExit(f"ERROR: truncated/overflowed .3nx entry at 0x{pos:X}: {path}")
+    if entry_end > len(data):
+        raise SystemExit(f"ERROR: truncated .3nx entry at 0x{pos:X}: {path}")
 
     q = pos + HEADER_SIZE
     reloc_end = q + reloc_size
@@ -326,17 +325,12 @@ while pos < len(data):
         _provider, count = struct.unpack_from("<II", data, q)
         q += 8
         group_bytes = count * 8
-        if q + group_bytes < q or q + group_bytes > reloc_end:
+        if q + group_bytes > reloc_end:
             raise SystemExit(f"ERROR: malformed .3nx relocation count at 0x{q:X}: {path}")
         q += group_bytes
-    if q != reloc_end:
-        raise SystemExit(f"ERROR: malformed .3nx relocation table at 0x{pos:X}: {path}")
 
     entries.append(f"{module_names[magic]}:{plugin_id}")
     pos = entry_end
-
-if pos != len(data):
-    raise SystemExit(f"ERROR: malformed .3nx file length: {path}")
 
 print(len(entries), ",".join(entries), sep="\t")
 PY
@@ -623,7 +617,6 @@ process_module_plugins() {
         PLUGIN_OUTPUT_FILES["$output_key"]="$final_name"
         PLUGIN_OUTPUT_PRIORITIES["$output_key"]="$priority"
         PLUGIN_OUTPUT_MODULES["$output_key"]="$module_name"
-        PLUGIN_OUTPUT_NAMES["$output_key"]="$out_name"
         PLUGIN_OUTPUT_IDS["$output_key"]="$pid"
 
         GENERATED_OUTPUTS+=("$final_name")
@@ -671,16 +664,6 @@ process_module_plugins() {
             if [[ "$ref" != "$pid" ]]; then
                 ref_count=$((ref_count + 1))
             fi
-
-            local found=false
-            local known
-
-            for known in "${plugin_ids[@]}"; do
-                if [[ "$known" == "$ref" ]]; then
-                    found=true
-                    break
-                fi
-            done
 
         done
 
@@ -798,7 +781,7 @@ process_module_plugins() {
 
     if [[ "$(sha256_file_or_missing "$ld_file")" != "$old_ld_hash" ]]; then
         MODULE_RELINK_REQUIRED["$module_name"]=true
-        BUILD_REASONS+=("${module_name}: plugin linker layout changed; relink only")
+        BUILD_REASONS+=("${module_name}: plugin linker layout changed, relink only")
     fi
 
     if [[ "$(sha256_file_or_missing "$create3nx_file")" != "$old_py_hash" ]]; then
@@ -829,18 +812,18 @@ process_module_plugins() {
     printf '%s' "$marker_source_fp_text" > "$marker_source_tmp"
 
     if [[ "$marker_fp" != "$previous_marker_fp" || ! -f "$marker_ld" ]]; then
-        echo "${module_name}: semantic marker state changed; preparing linker placeholders"
+        echo "${module_name}: semantic marker state changed, preparing linker placeholders"
         (cd "$module_dir" && python3 gen_plgmarkers.py --prepare)
         MODULE_RELINK_REQUIRED["$module_name"]=true
-        BUILD_REASONS+=("${module_name}: semantic markers changed; selective recompile + relink")
+        BUILD_REASONS+=("${module_name}: semantic markers changed, selective recompile + relink")
 
         if [[ "$marker_compiler_fp" != "$previous_marker_compiler_fp" ]]; then
-            echo "${module_name}: semantic GCC marker plugin changed; rebuilding compiler plugin"
+            echo "${module_name}: semantic GCC marker plugin changed, rebuilding compiler plugin"
             make -C "${ROOT_DIR}/sysplugin" tools
             MODULE_MARKER_COMPILER_CHANGED["$module_name"]=true
-            echo "${module_name}: invalidating C/C++ objects; preserving assembly/data objects"
+            echo "${module_name}: invalidating C/C++ objects, preserving assembly/data objects"
             invalidate_all_marker_compiled_objects "$module_name"
-            BUILD_NOTES+=("${module_name}: semantic GCC marker plugin changed; C/C++ sources will recompile, assembly/data objects preserved")
+            BUILD_NOTES+=("${module_name}: semantic GCC marker plugin changed, C/C++ sources will recompile, assembly/data objects preserved")
         else
             local changed_marker_source
             while IFS= read -r changed_marker_source; do
@@ -1060,7 +1043,7 @@ if magic not in (0x24584E33, 0x25584E33) or code_size == 0:
 raw_end = HEADER_SIZE + reloc_size + code_size + data_size + repair_size
 body_end = (raw_end + 0xF) & ~0xF
 old_end = body_end + old_metadata_size
-if old_metadata_size & 0xF or raw_end > body_end or old_end != len(data):
+if old_metadata_size & 0xF or old_end != len(data):
     raise SystemExit(f"ERROR: metadata target is malformed or stacked: {path}")
 
 metadata = bytearray()
@@ -1177,13 +1160,7 @@ prepare_stacked_outputs() {
             local generated_output="-"
             local identity
             local display_file
-            local configured=false
-
             if [[ -n "${PLUGIN_OUTPUT_FILES[$member_key]+present}" ]]; then
-                configured=true
-            fi
-
-            if [[ "$configured" == true ]]; then
                 kind="staged"
                 source="${PLUGIN_OUTPUT_FILES[$member_key]}"
                 priority="${PLUGIN_OUTPUT_PRIORITIES[$member_key]}"
@@ -1357,9 +1334,8 @@ if [[ ${#BUILD_NOTES[@]} -gt 0 ]]; then
     printf '\n'
 fi
 
-total_emit_count=$((MODULE_EMIT_COUNTS[rosalina] + MODULE_EMIT_COUNTS[loader]))
-if [[ "$total_emit_count" -eq 0 && "$total_config_count" -eq 0 ]]; then
-    printf 'No module plugins configured; completed .3nx files will be used for configured metadata/stack operations.\n\n'
+if [[ "$total_config_count" -eq 0 ]]; then
+    printf 'No module plugins configured. Completed .3nx files will be used for configured metadata/stack operations.\n\n'
 elif [[ ${#BUILD_REASONS[@]} -gt 0 ]]; then
     printf 'Selective rebuild/relink required:\n'
     for reason in "${BUILD_REASONS[@]}"; do
@@ -1367,12 +1343,9 @@ elif [[ ${#BUILD_REASONS[@]} -gt 0 ]]; then
     done
     printf '\n'
 else
-    printf 'Plugin layout and host markers unchanged; building modules.\n\n'
+    printf 'Plugin layout and host markers unchanged, building modules.\n\n'
 fi
 
-# A normal top-level Nexus build passes these version values down through
-# sysmodules/Makefile.  Read the same values here so an ELF-only plugin build uses
-# exactly the same compile-time version defines as boot.firm.
 read_version_var() {
     local name="$1"
     local value
@@ -1405,12 +1378,6 @@ build_module_elf() {
     local marker_make_override=()
     if [[ "${MODULE_MARKER_COMPILER_CHANGED[$module_name]}" == true ]]; then
         local marker_plugin_path="${ROOT_DIR}/sysplugin/build/semantic_marker_plugin.so"
-        # The recursive module Makefile currently lists the semantic GCC plugin as a
-        # prerequisite of every source object, including assembly.  We already rebuilt
-        # the plugin above and explicitly removed every C/C++ object whose semantic
-        # manifest depends on it.  Treat the plugin as an old prerequisite in the
-        # recursive make so unrelated assembly objects are not rebuilt solely because
-        # the .so acquired a newer timestamp.
         marker_make_override+=("MAKE=make --old-file=${marker_plugin_path}")
     fi
 
@@ -1612,19 +1579,15 @@ for module_name in "${!MODULE_CONFIG_FP[@]}"; do
     write_state "${STATE_DIR}/${module_name}.marker-compiler.sha256" "${MODULE_MARKER_COMPILER_FP[$module_name]}"
 done
 
-if [[ ${#PUBLISHED_OUTPUTS[@]} -eq 0 ]]; then
-    : > "${STATE_DIR}/outputs.list"
-else
-    : > "${STATE_DIR}/outputs.list"
-    first_output=true
-    for output_name in "${PUBLISHED_OUTPUTS[@]}"; do
-        if [[ "$first_output" == true ]]; then
-            first_output=false
-        else
-            printf '\n' >> "${STATE_DIR}/outputs.list"
-        fi
-        printf '%s' "$output_name" >> "${STATE_DIR}/outputs.list"
-    done
-fi
+: > "${STATE_DIR}/outputs.list"
+first_output=true
+for output_name in "${PUBLISHED_OUTPUTS[@]}"; do
+    if [[ "$first_output" == true ]]; then
+        first_output=false
+    else
+        printf '\n' >> "${STATE_DIR}/outputs.list"
+    fi
+    printf '%s' "$output_name" >> "${STATE_DIR}/outputs.list"
+done
 
 printf '\nDone. Re-run ./makeplugin.sh for every plugin build.\n\n'
