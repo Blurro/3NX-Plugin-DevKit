@@ -3,8 +3,9 @@ Nexus3DS Sysplugin Dev Kit
 
 Base workflow
 -------------
-Apply this ZIP over a clean, unbuilt sysplugin-capable Nexus3DS source tree,
-then apply your plugin overlay.
+Apply this ZIP over a clean, unbuilt, Nexus3DS clone.
+(Currently the /dev/ branch is the latest)
+Then apply your plugin overlay.
 
 Edit only the CONFIG block at the top of makeplugin.sh, then run:
 
@@ -14,7 +15,7 @@ Edit only the CONFIG block at the top of makeplugin.sh, then run:
 Plugin overlays
 ---------------
 Files listed in SYSPLUGIN_DEVKIT_OWNED_FILES.txt belong to the dev kit and
-should not be replaced by plugin overlays.
+generally should not be replaced by plugin overlays.
 
 The only exception is the CONFIG block in makeplugin.sh:
 
@@ -85,9 +86,11 @@ and MENU in that plugin's allowed_refs.
 You do not need MENU's source to build against it.
 
 
-Transient .3on tools
---------------------
-The dev kit already includes:
+.3on tools
+----------
+The dev kit includes:
 
     sysplugin/make_transient_3on.py
     sysplugin/compress_3on_lzss.py
+
+To assist in creating Online Menu or other dynamically-loaded pages and code.

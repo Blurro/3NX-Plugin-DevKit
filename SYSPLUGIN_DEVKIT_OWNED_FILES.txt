@@ -1,6 +1,6 @@
 # Nexus3DS Sysplugin Dev Kit owned files.
-# Plugin overlays must not replace these files.
-# Exception: only the delimited CONFIG block in makeplugin.sh may be edited.
+# General rule of thumb that plugin overlays do not replace any of these.
+# Exception: only the CONFIG block in makeplugin.sh may be edited.
 Makefile
 SYSPLUGIN_DEVKIT_README.txt
 SYSPLUGIN_DEVKIT_OWNED_FILES.txt
