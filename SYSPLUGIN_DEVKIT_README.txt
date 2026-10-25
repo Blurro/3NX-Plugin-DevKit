@@ -88,9 +88,27 @@ You do not need MENU's source to build against it.
 
 .3on tools
 ----------
-The dev kit includes:
+An entry in either ROSALINA_PLUGIN_CONFIG or LOADER_PLUGIN_CONFIG can be a
+transient. Set its references field to "transient" alone:
 
-    sysplugin/make_transient_3on.py
-    sysplugin/compress_3on_lzss.py
+    "demo|mytransient||transient"
 
-To assist in creating Online Menu or other dynamically-loaded pages and code.
+The priority field can be left blank or set to a number like 999. It is
+ignored for transients, so either way the output is mytransient.3on. A
+transient can be loaded by Loader or Rosalina when there is code to load it.
+
+LZ10 compression
+----------------
+Use sysplugin/compress_lzss.py to compress any nonempty file, including
+assets you plan to put in plugin metadata:
+
+    python3 sysplugin/compress_lzss.py image.bin image.bin.lz
+
+The output is a raw LZ10 stream with a 0x10 header and a 24-bit original
+size. Inputs can be up to 16,777,215 bytes. MENU's
+PLUGIN_MENU_UnpackLz10File can unpack a range containing that stream from an
+open plugin file to an SD file. Pass it the offset and size of the compressed
+data in the plugin file.
+
+The compressor checks that its output decompresses back to the original
+file. Compression may make a file larger if it has little repeated data.

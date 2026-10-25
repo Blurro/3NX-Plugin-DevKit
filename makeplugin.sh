@@ -54,11 +54,17 @@ fi
 #       Higher = reference, lower = dependency.
 #       If a plugin's reference is unavailable before main()s run, its runtime pointer slots to it are NULL.
 #       If a plugin is early-rejected or main() returns false, the runtime rejects not-yet-run plugins that depend on it.
+#       Use exactly "transient" here to build a self-contained .3on instead of a .3nx.
+#       It works in either config array and can be loaded by Loader or Rosalina.
+#       A transient cannot reference MENU, HOST symbols, or another plugin.
 #       Example config:
 #           blur references only itself, so this can be empty:
 #               "blur|blurPLGbase|10|"
 #           if coin were to reference blur and ref2 it would be
 #               "coin|coinmod|50|blur,ref2"
+#           a transient in either config array:
+#               "demo|mytransient||transient"
+#               "demo|mytransient|999|transient"  # also writes mytransient.3on
 #
 
 ROSALINA_PLUGIN_CONFIG=(
@@ -248,6 +254,8 @@ declare -A PLUGIN_OUTPUT_FILES=()
 declare -A PLUGIN_OUTPUT_PRIORITIES=()
 declare -A PLUGIN_OUTPUT_MODULES=()
 declare -A PLUGIN_OUTPUT_IDS=()
+declare -A TRANSIENT_OUTPUT_IDS=()
+declare -A TRANSIENT_SOURCE_FILES=()
 declare -A METADATA_TARGET_OUTPUTS=()
 declare -A METADATA_TARGET_KINDS=()
 declare -A METADATA_TARGET_SOURCES=()
@@ -285,9 +293,10 @@ import sys
 
 path = pathlib.Path(sys.argv[1])
 data = path.read_bytes()
-module_names = {0x24584E33: "rosalina", 0x25584E33: "loader"}
+module_names = {0x24584E33: "rosalina", 0x25584E33: "loader", 0x26584E33: "transient"}
 HEADER_SIZE = 0x30
 entries = []
+has_transient = False
 pos = 0
 
 if not data:
@@ -300,6 +309,7 @@ while pos < len(data):
     magic, _pid_word, code_size, data_size, _bss_size, reloc_size, repair_size, _abi_lo, _abi_hi, _env_lo, _env_hi, metadata_size = struct.unpack_from("<12I", data, pos)
     if magic not in module_names or code_size == 0:
         raise SystemExit(f"ERROR: invalid .3nx header at 0x{pos:X}: {path}")
+    has_transient |= magic == 0x26584E33
 
     raw_id = data[pos + 4:pos + 8]
     try:
@@ -332,13 +342,13 @@ while pos < len(data):
     entries.append(f"{module_names[magic]}:{plugin_id}")
     pos = entry_end
 
-print(len(entries), ",".join(entries), sep="\t")
+print(len(entries), ",".join(entries), int(has_transient), sep="\t")
 PY
 )"; then
         exit 1
     fi
 
-    IFS=$'\t' read -r INSPECTED_STACK_ENTRY_COUNT INSPECTED_STACK_IDENTITIES <<< "$result"
+    IFS=$'\t' read -r INSPECTED_STACK_ENTRY_COUNT INSPECTED_STACK_IDENTITIES INSPECTED_STACK_HAS_TRANSIENT <<< "$result"
 }
 
 sha256_file_or_missing() {
@@ -581,7 +591,17 @@ process_module_plugins() {
             exit 1
         fi
 
-        if [[ ! "$priority" =~ ^[0-9]+$ ]]; then
+        local transient=false
+        if [[ "$allowed_refs" == "transient" ]]; then
+            transient=true
+        elif [[ "$allowed_refs" == *"transient"* ]]; then
+            printf "bad allowed_refs for %s: use 'transient' alone, without plugin IDs\n" "$pid" >&2
+            exit 1
+        fi
+
+        if [[ -z "$priority" && "$transient" == true ]]; then
+            priority=0
+        elif [[ ! "$priority" =~ ^[0-9]+$ ]]; then
             echo "bad priority '$priority' for $pid in ${module_name}: must be a non-negative integer"
             exit 1
         fi
@@ -600,8 +620,16 @@ process_module_plugins() {
         # Python 3 rejects decimal literals such as 010. Normalize once and
         # use the same value in metadata and the final filename.
         priority="$priority_normalized"
+        if [[ "$transient" == true ]]; then
+            priority=0
+        fi
 
-        local final_name="${out_name}.${priority}.3nx"
+        local final_name
+        if [[ "$transient" == true ]]; then
+            final_name="${out_name}.3on"
+        else
+            final_name="${out_name}.${priority}.3nx"
+        fi
         if [[ ${#final_name} -ge 256 ]]; then
             echo "bad output filename '$final_name' for $pid in ${module_name}: must be shorter than 256 ASCII bytes"
             exit 1
@@ -618,6 +646,10 @@ process_module_plugins() {
         PLUGIN_OUTPUT_PRIORITIES["$output_key"]="$priority"
         PLUGIN_OUTPUT_MODULES["$output_key"]="$module_name"
         PLUGIN_OUTPUT_IDS["$output_key"]="$pid"
+        if [[ "$transient" == true ]]; then
+            TRANSIENT_OUTPUT_IDS["$final_name"]="$pid"
+            TRANSIENT_SOURCE_FILES["$final_name"]="${out_name}.${priority}.3nx"
+        fi
 
         GENERATED_OUTPUTS+=("$final_name")
         emit_count=$((emit_count + 1))
@@ -646,6 +678,9 @@ process_module_plugins() {
         local -A seen_refs=()
 
         IFS=',' read -ra refs <<< "${plugin_allowed_refs[$i]}"
+        if [[ "${plugin_allowed_refs[$i]}" == "transient" ]]; then
+            continue
+        fi
 
         local ref
         for ref in "${refs[@]}"; do
@@ -748,9 +783,11 @@ process_module_plugins() {
             local priority="${plugin_priorities[$i]}"
             local allowed_refs="${plugin_allowed_refs[$i]}"
             local refs_py="\"$pid\""
-            local refs
+            local refs=()
 
-            IFS=',' read -ra refs <<< "$allowed_refs"
+            if [[ "$allowed_refs" != "transient" ]]; then
+                IFS=',' read -ra refs <<< "$allowed_refs"
+            fi
 
             local ref
             for ref in "${refs[@]}"; do
@@ -915,6 +952,7 @@ resolve_nonconfig_plugin_file() {
     NONCONFIG_STACK_HASH="$selected_hash"
     NONCONFIG_STACK_ENTRY_COUNT="$INSPECTED_STACK_ENTRY_COUNT"
     NONCONFIG_STACK_IDENTITIES="$INSPECTED_STACK_IDENTITIES"
+    NONCONFIG_STACK_HAS_TRANSIENT="$INSPECTED_STACK_HAS_TRANSIENT"
 }
 
 prepare_metadata_outputs() {
@@ -978,6 +1016,9 @@ prepare_metadata_outputs() {
             output_file="${PLUGIN_OUTPUT_FILES[$plugin_key]}"
             source="$output_file"
             identity="${PLUGIN_OUTPUT_MODULES[$plugin_key]}:${PLUGIN_OUTPUT_IDS[$plugin_key]}"
+            if [[ "$output_file" == *.3on ]]; then
+                identity="transient:${PLUGIN_OUTPUT_IDS[$plugin_key]}"
+            fi
         else
             resolve_nonconfig_plugin_file "$plugin_name" "metadata target"
             if [[ "$NONCONFIG_STACK_ENTRY_COUNT" -ne 1 ]]; then
@@ -1034,12 +1075,12 @@ METADATA_SIZE_OFFSET = 0x2C
 if len(data) < HEADER_SIZE:
     raise SystemExit(f"ERROR: truncated .3nx metadata target: {path}")
 
-header = struct.unpack_from("<12I", data, 0)
+header = struct.unpack_from("<11I", data, 0)
 magic, _pid, code_size, data_size, _bss_size, reloc_size, repair_size = header[:7]
-old_metadata_size = header[11]
-if magic not in (0x24584E33, 0x25584E33) or code_size == 0:
+if magic not in (0x24584E33, 0x25584E33, 0x26584E33) or code_size == 0:
     raise SystemExit(f"ERROR: invalid .3nx metadata target: {path}")
 
+old_metadata_size = struct.unpack_from("<I", data, METADATA_SIZE_OFFSET)[0]
 raw_end = HEADER_SIZE + reloc_size + code_size + data_size + repair_size
 body_end = (raw_end + 0xF) & ~0xF
 old_end = body_end + old_metadata_size
@@ -1163,12 +1204,20 @@ prepare_stacked_outputs() {
             if [[ -n "${PLUGIN_OUTPUT_FILES[$member_key]+present}" ]]; then
                 kind="staged"
                 source="${PLUGIN_OUTPUT_FILES[$member_key]}"
+                if [[ "$source" == *.3on ]]; then
+                    printf "bad stack member '%s': transient .3on files cannot be stacked\n" "$member_name" >&2
+                    exit 1
+                fi
                 priority="${PLUGIN_OUTPUT_PRIORITIES[$member_key]}"
                 generated_output="$source"
                 identity="${PLUGIN_OUTPUT_MODULES[$member_key]}:${PLUGIN_OUTPUT_IDS[$member_key]}"
                 display_file="$source"
             else
                 resolve_nonconfig_plugin_file "$member_name" "stack member"
+                if [[ "$NONCONFIG_STACK_HAS_TRANSIENT" == 1 ]]; then
+                    printf "bad stack member '%s': transient .3on files cannot be stacked\n" "$member_name" >&2
+                    exit 1
+                fi
                 source="$NONCONFIG_STACK_SOURCE"
                 priority="$NONCONFIG_STACK_PRIORITY"
                 size="$NONCONFIG_STACK_SIZE"
@@ -1425,6 +1474,11 @@ for module_name in rosalina loader; do
             NEXUS_3NX_OUTPUT_DIR="$OUTPUT_STAGE" python3 create3nx.py
         )
     fi
+done
+
+for output_name in "${!TRANSIENT_OUTPUT_IDS[@]}"; do
+    python3 "${ROOT_DIR}/sysplugin/finalize_transient_3on.py" \
+        "${OUTPUT_STAGE}/${TRANSIENT_SOURCE_FILES[$output_name]}" "${TRANSIENT_OUTPUT_IDS[$output_name]}"
 done
 
 for output_name in "${GENERATED_OUTPUTS[@]}"; do

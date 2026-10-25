@@ -19,5 +19,5 @@ sysmodules/rosalina/include/sysplugin_menu.h
 sysmodules/rosalina/include/sysplugin_symbols.h
 sysplugin/create3nx_common.py
 sysplugin/include/sysplugin_plugin.h
-sysplugin/make_transient_3on.py
-sysplugin/compress_3on_lzss.py
+sysplugin/finalize_transient_3on.py
+sysplugin/compress_lzss.py

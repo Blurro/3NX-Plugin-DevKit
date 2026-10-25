@@ -1,46 +1,31 @@
 from collections import defaultdict, deque
 from pathlib import Path
-import struct
 import sys
 
-TRANSIENT_MAGIC = 0x26584E33
-HEADER_SIZE = 0x30
-VERSION_MAGIC = b"3NXO"
-COMPRESSED_MAGIC = b"3NXO"
 LZ10_TYPE = 0x10
 WINDOW = 4096
 MIN_MATCH = 3
 MAX_MATCH = 18
 
 
-def align16(value):
-    return (value + 0xF) & ~0xF
-
-
-def read_version(data):
-    if len(data) < HEADER_SIZE:
-        raise SystemExit("ERROR: transient has no modern metadata header")
-    fields = struct.unpack_from("<12I", data, 0)
-    magic, _pid, code_size, data_size, _bss_size, reloc_size, repair_size = fields[:7]
-    metadata_size = fields[11]
-    if magic != TRANSIENT_MAGIC:
-        raise SystemExit("ERROR: input is not a 3NX& transient")
-    raw_end = HEADER_SIZE + reloc_size + code_size + data_size + repair_size
-    metadata_offset = align16(raw_end)
-    if metadata_size < 8 or metadata_offset + metadata_size != len(data):
-        raise SystemExit("ERROR: transient metadata is missing or malformed")
-    if data[metadata_offset:metadata_offset + 4] != VERSION_MAGIC:
-        raise SystemExit("ERROR: transient metadata does not begin with 3NXO")
-    return struct.unpack_from("<I", data, metadata_offset + 4)[0]
-
-
 def compress_lz10(data):
+    if not data:
+        raise SystemExit("ERROR: LZ10 input is empty")
     if len(data) > 0xFFFFFF:
         raise SystemExit("ERROR: LZ10 payload exceeds 24-bit size field")
 
     positions = defaultdict(deque)
+    recent = deque()
     stream = bytearray()
     index = 0
+
+    def expire(current):
+        while recent and current - recent[0][0] > WINDOW:
+            position, key = recent.popleft()
+            candidates = positions[key]
+            candidates.popleft()
+            if not candidates:
+                del positions[key]
 
     while index < len(data):
         flag_offset = len(stream)
@@ -51,15 +36,12 @@ def compress_lz10(data):
             if index >= len(data):
                 break
 
+            expire(index)
             best_length = 0
             best_distance = 0
             if index + MIN_MATCH <= len(data):
                 key = data[index:index + MIN_MATCH]
-                candidates = positions[key]
-                while candidates and index - candidates[0] > WINDOW:
-                    candidates.popleft()
-
-                for position in reversed(list(candidates)[-64:]):
+                for position in reversed(list(positions.get(key, ()))[-64:]):
                     distance = index - position
                     maximum = min(MAX_MATCH, len(data) - index)
                     length = MIN_MATCH
@@ -84,11 +66,10 @@ def compress_lz10(data):
             for step in range(consumed):
                 position = index + step
                 if position + MIN_MATCH <= len(data):
+                    expire(position)
                     key = data[position:position + MIN_MATCH]
-                    candidates = positions[key]
-                    candidates.append(position)
-                    while candidates and position - candidates[0] > WINDOW:
-                        candidates.popleft()
+                    positions[key].append(position)
+                    recent.append((position, key))
             index += consumed
 
         stream[flag_offset] = flags
@@ -141,20 +122,15 @@ def decompress_lz10(blob):
 
 def main(source, destination):
     data = Path(source).read_bytes()
-    version = read_version(data)
     compressed_blob = compress_lz10(data)
     if decompress_lz10(compressed_blob) != data:
         raise SystemExit("ERROR: LZ10 round-trip validation failed")
 
-    wrapper = COMPRESSED_MAGIC + struct.pack("<II", version, len(compressed_blob))
-    Path(destination).write_bytes(wrapper + compressed_blob)
-    print(
-        f"Wrote {destination} ({len(data)} -> {len(compressed_blob)} bytes LZ10, "
-        f"3NXO version {version})"
-    )
+    Path(destination).write_bytes(compressed_blob)
+    print(f"Wrote {destination} ({len(data)} -> {len(compressed_blob)} bytes LZ10)")
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        raise SystemExit("usage: compress_3on_lzss.py SOURCE.3on DESTINATION.lz")
+        raise SystemExit("usage: compress_lzss.py SOURCE DESTINATION.lz")
     main(sys.argv[1], sys.argv[2])

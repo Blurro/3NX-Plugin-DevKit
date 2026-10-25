@@ -19,7 +19,7 @@ Check out my **[Sysplugin Showcase Presentation](https://blurro.github.io/sysplu
 * Plugin metadata packing - this allows any number of assets to be stored into a plugin file, this is not loaded to memory
 * Multiple plugins can be stacked into a single `.3nx`
 * Automatic rejection/unloading when plugins or their dependencies fail
-* Tools for creating transient `.3on` plugins - see [Syplugin Menu](https://github.com/Blurro/MENU-Sysplugin-3DS) for uses (e.g. temporarily load code, add as online source)
+* Build and verify transient `.3on` plugins with `|transient` in the references field - see [Sysplugin Menu](https://github.com/Blurro/MENU-Sysplugin-3DS) for uses (e.g. temporarily load code, add as online source)
 
 ## Using Sysplugins
 
@@ -215,5 +215,15 @@ STACKED_PLUGIN_CONFIG=(
 The individual plugins still retain their own module, ID and execution ordering. Stacking just allows them to be distributed as one file.
 
 </details>
+
+## Compressing assets
+
+`sysplugin/compress_lzss.py` makes a raw LZ10 file from any nonempty file:
+
+```bash
+python3 sysplugin/compress_lzss.py image.bin image.bin.lz
+```
+
+You can pack the result into plugin metadata. MENU's `PLUGIN_MENU_UnpackLz10File` unpacks a compressed range from an open plugin file to an SD file. The input limit is 16,777,215 bytes, and the script checks its output by decompressing it before writing.
 
 3NX Sysplugins and their development tools are still under active development, so this kit and API may continue to evolve.
